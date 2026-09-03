@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "question": "What Javascript engine powers the Node.js runtime?",
+    "options": ["V8", "SpiderMonkey", "Chakra", "JavaScriptCore"],
+    "correctOption": 0,
+    "explanation": "Node.js is built upon Google Chrome's open-source V8 JavaScript engine."
+  },
+  {
+    "id": 2,
+    "question": "Which HTTP status code signifies 'Created' after a POST request?",
+    "options": ["200", "201", "204", "301"],
+    "correctOption": 1,
+    "explanation": "HTTP 201 Created indicates that the request was successful and a new resource was created."
+  },
+  {
+    "id": 3,
+    "question": "In WebSocket protocol (Socket.io), what method joins a socket to a room?",
+    "options": ["socket.enter()", "socket.join()", "socket.subscribe()", "socket.attach()"],
+    "correctOption": 1,
+    "explanation": "The 'socket.join(roomName)' method subscribes a client socket to an isolated channel room."
+  },
+  {
+    "id": 4,
+    "question": "Which MongoDB method retrieves documents with matching criteria?",
+    "options": ["Model.fetch()", "Model.select()", "Model.find()", "Model.query()"],
+    "correctOption": 2,
+    "explanation": "Mongoose and MongoDB use Model.find(filter) to query collections."
+  },
+  {
+    "id": 5,
+    "question": "What is the primary benefit of Firestore ACID transactions (runTransaction)?",
+    "options": [
+      "Compresses database storage",
+      "Guarantees atomic reads & writes preventing race conditions",
+      "Increases API network latency",
+      "Disables security rules"
+    ],
+    "correctOption": 1,
+    "explanation": "Firestore runTransaction executes atomic operations to prevent double-booking and data inconsistencies."
+  }
+]

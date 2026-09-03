@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Player GamePad - Live Quiz</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container" style="max-width: 600px;">
+    <!-- Join Lobby -->
+    <div id="player-login" class="card">
+      <h2>🎮 Enter Game PIN</h2>
+      <input type="number" id="player-pin" class="input-field" placeholder="Game PIN (e.g. 8421)" />
+      <input type="text" id="player-name" class="input-field" placeholder="Your Nickname" />
+      <button id="btn-join-game" class="btn">Enter Arena ⚡</button>
+    </div>
+
+    <!-- Waiting Lobby -->
+    <div id="player-lobby" class="card" style="display: none;">
+      <div style="font-size: 3rem; margin-bottom: 12px;">⏳</div>
+      <h2>You are in!</h2>
+      <p style="color: var(--text-muted); margin-top: 8px;">Waiting for host to launch questions...</p>
+      <div style="margin-top: 20px; font-weight: 700; color: #60a5fa;" id="player-display-name">Player</div>
+    </div>
+
+    <!-- Gamepad Round -->
+    <div id="player-gamepad" class="card" style="display: none; max-width: 600px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <span id="player-score-badge" style="background: rgba(99, 102, 241, 0.2); padding: 4px 12px; border-radius: 20px; color: #818cf8; font-weight: 700;">Score: 0</span>
+        <span id="player-timer-badge" style="font-weight: 800; font-size: 1.2rem; color: #ef4444;">15s</span>
+      </div>
+
+      <h3 id="player-q-prompt" style="font-size: 1.15rem; margin-bottom: 20px;">Question Question...</h3>
+
+      <!-- 4 Kahoot-style buttons -->
+      <div class="answer-grid">
+        <button class="answer-btn btn-red" data-option="0" id="btn-opt-0">🔺 Red</button>
+        <button class="answer-btn btn-blue" data-option="1" id="btn-opt-1">🔷 Blue</button>
+        <button class="answer-btn btn-yellow" data-option="2" id="btn-opt-2">🟡 Yellow</button>
+        <button class="answer-btn btn-green" data-option="3" id="btn-opt-3">🟩 Green</button>
+      </div>
+    </div>
+
+    <!-- Round Result Feedback -->
+    <div id="player-feedback" class="card" style="display: none;">
+      <div id="feedback-icon" style="font-size: 4rem;">✅</div>
+      <h2 id="feedback-title">Correct!</h2>
+      <div id="feedback-points" style="font-size: 1.5rem; color: #fbbf24; font-weight: 700; margin: 12px 0;">+850 Points</div>
+      <p style="color: var(--text-muted);">Waiting for next question round...</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentPin = '';
+    let questionStartTime = 0;
+    let currentScore = 0;
+
+    const loginDiv = document.getElementById('player-login');
+    const lobbyDiv = document.getElementById('player-lobby');
+    const gamepadDiv = document.getElementById('player-gamepad');
+    const feedbackDiv = document.getElementById('player-feedback');
+
+    document.getElementById('btn-join-game').addEventListener('click', () => {
+      const pin = document.getElementById('player-pin').value.trim();
+      const playerName = document.getElementById('player-name').value.trim();
+
+      if (!pin || !playerName) return alert('Please enter both PIN and nickname');
+
+      currentPin = pin;
+      socket.emit('quiz:join', { pin, playerName });
+    });
+
+    socket.on('quiz:joined', (data) => {
+      loginDiv.style.display = 'none';
+      lobbyDiv.style.display = 'block';
+      document.getElementById('player-display-name').textContent = `Nickname: ${data.playerName}`;
+    });
+
+    socket.on('quiz:error', (data) => {
+      alert(data.message);
+    });
+
+    socket.on('question:start', (data) => {
+      lobbyDiv.style.display = 'none';
+      feedbackDiv.style.display = 'none';
+      gamepadDiv.style.display = 'block';
+
+      questionStartTime = Date.now();
+      document.getElementById('player-q-prompt').textContent = data.question;
+      document.getElementById('player-timer-badge').textContent = `${data.timeLimitSeconds}s`;
+
+      const optButtons = document.querySelectorAll('.answer-btn');
+      optButtons.forEach((btn, idx) => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = data.options[idx] || `Option ${idx + 1}`;
+      });
+    });
+
+    socket.on('timer:tick', (data) => {
+      document.getElementById('player-timer-badge').textContent = `${data.timeRemaining}s`;
+    });
+
+    document.querySelectorAll('.answer-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const selected = btn.getAttribute('data-option');
+        const elapsed = Date.now() - questionStartTime;
+
+        // Disable buttons after answer
+        document.querySelectorAll('.answer-btn').forEach(b => {
+          b.disabled = true;
+          b.style.opacity = '0.5';
+        });
+        btn.style.opacity = '1';
+
+        socket.emit('answer:submit', {
+          pin: currentPin,
+          selectedOption: selected,
+          timeTakenMs: elapsed
+        });
+      });
+    });
+
+    socket.on('answer:result', (data) => {
+      gamepadDiv.style.display = 'none';
+      feedbackDiv.style.display = 'block';
+
+      currentScore = data.totalScore;
+      document.getElementById('player-score-badge').textContent = `Score: ${currentScore}`;
+
+      if (data.isCorrect) {
+        document.getElementById('feedback-icon').textContent = '🎉';
+        document.getElementById('feedback-title').textContent = 'Correct Answer!';
+        document.getElementById('feedback-points').textContent = `+${data.pointsEarned} Points`;
+      } else {
+        document.getElementById('feedback-icon').textContent = '❌';
+        document.getElementById('feedback-title').textContent = 'Incorrect!';
+        document.getElementById('feedback-points').textContent = '+0 Points';
+      }
+    });
+
+    socket.on('quiz:ended', (data) => {
+      gamepadDiv.style.display = 'none';
+      feedbackDiv.style.display = 'block';
+      feedbackDiv.innerHTML = `
+        <div style="font-size: 3.5rem;">🏁</div>
+        <h2>Battle Completed!</h2>
+        <div style="font-size: 1.4rem; color: #60a5fa; margin: 16px 0;">Final Score: ${currentScore} pts</div>
+        <p style="color: var(--text-muted);">Winner: ${data.winner ? data.winner.name : 'None'} (${data.winner ? data.winner.score : 0} pts)</p>
+        <a href="player.html" class="btn" style="margin-top: 20px;">Play Again</a>
+      `;
+    });
+  </script>
+</body>
+</html>

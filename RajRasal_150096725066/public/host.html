@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Host Control Panel - Live Quiz</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container" style="max-width: 800px;">
+    <!-- Step 1: Create Game Screen -->
+    <div id="host-setup" class="card">
+      <h2>👑 Host a Quiz Battle</h2>
+      <p style="color: var(--text-muted); margin-bottom: 20px;">Configure your room and generate a PIN for players</p>
+      <input type="text" id="host-name" class="input-field" placeholder="Host Name (e.g., Professor X)" value="Professor X" />
+      <button id="btn-create-quiz" class="btn">Generate Game PIN</button>
+    </div>
+
+    <!-- Step 2: Lobby Screen -->
+    <div id="host-lobby" class="card" style="display: none; max-width: 600px;">
+      <p style="color: var(--text-muted);">Join at <strong>localhost:5000/player.html</strong></p>
+      <div style="font-size: 3.5rem; font-weight: 800; color: #60a5fa; letter-spacing: 0.1em; margin: 12px 0;" id="lobby-pin">----</div>
+      
+      <div style="margin: 20px 0;">
+        <h3>Joined Players (<span id="player-count">0</span>):</h3>
+        <div id="lobby-players-list" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px;"></div>
+      </div>
+
+      <button id="btn-start-game" class="btn" style="background: #22c55e;">Start Quiz Battle 🚀</button>
+    </div>
+
+    <!-- Step 3: Question Display Screen -->
+    <div id="host-gameplay" class="card" style="display: none; max-width: 700px;">
+      <div style="display: flex; justify-content: space-between; color: var(--text-muted);">
+        <span id="question-number">Question 1/5</span>
+        <span id="answers-submitted">Answers: 0/0</span>
+      </div>
+
+      <div class="timer-circle" id="timer-display">15</div>
+      <h2 id="question-text" style="font-size: 1.4rem; margin: 16px 0; line-height: 1.4;">Question Prompt</h2>
+
+      <div id="options-display" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
+        <!-- Option Cards -->
+      </div>
+      <div id="explanation-box" style="margin-top: 16px; padding: 12px; background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; border-radius: 8px; display: none;"></div>
+    </div>
+
+    <!-- Step 4: Leaderboard Screen -->
+    <div id="host-leaderboard" class="card" style="display: none; max-width: 600px;">
+      <h2>🏆 Live Leaderboard</h2>
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let currentPin = '';
+
+    const setupDiv = document.getElementById('host-setup');
+    const lobbyDiv = document.getElementById('host-lobby');
+    const gameplayDiv = document.getElementById('host-gameplay');
+    const leaderboardDiv = document.getElementById('host-leaderboard');
+
+    document.getElementById('btn-create-quiz').addEventListener('click', () => {
+      const hostName = document.getElementById('host-name').value.trim();
+      socket.emit('quiz:create', { hostName, category: 'Tech' });
+    });
+
+    socket.on('quiz:created', (data) => {
+      currentPin = data.pin;
+      document.getElementById('lobby-pin').textContent = data.pin;
+      setupDiv.style.display = 'none';
+      lobbyDiv.style.display = 'block';
+    });
+
+    socket.on('lobby:update', (data) => {
+      document.getElementById('player-count').textContent = data.players.length;
+      const list = document.getElementById('lobby-players-list');
+      list.innerHTML = '';
+      data.players.forEach(p => {
+        const tag = document.createElement('span');
+        tag.style.background = '#334155';
+        tag.style.padding = '6px 14px';
+        tag.style.borderRadius = '20px';
+        tag.style.fontWeight = '600';
+        tag.textContent = p.name;
+        list.appendChild(tag);
+      });
+    });
+
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      socket.emit('quiz:start', { pin: currentPin });
+    });
+
+    socket.on('quiz:starting', (data) => {
+      lobbyDiv.style.display = 'none';
+      gameplayDiv.style.display = 'block';
+      document.getElementById('question-text').textContent = data.message;
+    });
+
+    socket.on('question:start', (data) => {
+      leaderboardDiv.style.display = 'none';
+      gameplayDiv.style.display = 'block';
+      document.getElementById('explanation-box').style.display = 'none';
+      document.getElementById('question-number').textContent = `Question ${data.questionIndex}/${data.totalQuestions}`;
+      document.getElementById('question-text').textContent = data.question;
+      document.getElementById('timer-display').textContent = data.timeLimitSeconds;
+
+      const optContainer = document.getElementById('options-display');
+      optContainer.innerHTML = '';
+      const colors = ['#ef4444', '#3b82f6', '#eab308', '#22c55e'];
+      data.options.forEach((opt, idx) => {
+        const card = document.createElement('div');
+        card.id = `opt-card-${idx}`;
+        card.style.background = colors[idx % 4];
+        card.style.padding = '16px';
+        card.style.borderRadius = '10px';
+        card.style.fontWeight = '600';
+        card.textContent = opt;
+        optContainer.appendChild(card);
+      });
+    });
+
+    socket.on('timer:tick', (data) => {
+      document.getElementById('timer-display').textContent = data.timeRemaining;
+    });
+
+    socket.on('host:player_answered', (data) => {
+      document.getElementById('answers-submitted').textContent = `Answers: ${data.answeredCount}/${data.totalPlayers}`;
+    });
+
+    socket.on('question:time_up', (data) => {
+      const exp = document.getElementById('explanation-box');
+      exp.style.display = 'block';
+      exp.innerHTML = `✅ <strong>Answer:</strong> ${data.explanation}`;
+    });
+
+    socket.on('leaderboard:update', (data) => {
+      gameplayDiv.style.display = 'none';
+      leaderboardDiv.style.display = 'block';
+      const tbody = document.getElementById('leaderboard-body');
+      tbody.innerHTML = '';
+      data.leaderboard.forEach(p => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${p.rank === 1 ? '🥇 1' : p.rank === 2 ? '🥈 2' : p.rank === 3 ? '🥉 3' : p.rank}</td>
+          <td style="font-weight: 600;">${p.name}</td>
+          <td style="color: #60a5fa; font-weight: 700;">${p.score} pts</td>
+        `;
+        tbody.appendChild(row);
+      });
+    });
+
+    socket.on('quiz:ended', (data) => {
+      gameplayDiv.style.display = 'none';
+      leaderboardDiv.style.display = 'block';
+      leaderboardDiv.innerHTML = `
+        <div style="font-size: 3.5rem;">🎉👑🎉</div>
+        <h2>Quiz Winner!</h2>
+        <div style="font-size: 2rem; color: #fbbf24; font-weight: 800; margin: 12px 0;">${data.winner ? data.winner.name : 'No Winner'}</div>
+        <p style="font-size: 1.2rem; margin-bottom: 24px;">Top Score: ${data.winner ? data.winner.score : 0} points</p>
+        <a href="host.html" class="btn">Host Another Game</a>
+      `;
+    });
+  </script>
+</body>
+</html>
